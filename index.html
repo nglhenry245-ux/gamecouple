@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trò Chơi Thử Thách - Party Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+    
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #0f172a; /* Tailwind slate-900 */
+            color: #f8fafc;
+        }
+        
+        /* Hiệu ứng Glow nhẹ cho thẻ chính */
+        .glow-card {
+            box-shadow: 0 0 40px -10px rgba(99, 102, 241, 0.15);
+        }
+
+        /* Tùy chỉnh thanh cuộn cho JSON textarea */
+        textarea::-webkit-scrollbar {
+            width: 8px;
+        }
+        textarea::-webkit-scrollbar-track {
+            background: #1e293b; 
+        }
+        textarea::-webkit-scrollbar-thumb {
+            background: #475569; 
+            border-radius: 4px;
+        }
+        
+        /* Vô hiệu hóa bôi đen văn bản trên giao diện Game */
+        .no-select {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+    </style>
+</head>
+<body class="min-h-screen antialiased flex flex-col relative selection:bg-indigo-500 selection:text-white">
+
+    <!-- Khu vực vô hình kích hoạt Cheat Mode (Góc trên cùng bên trái 50x50px) -->
+    <div class="fixed top-0 left-0 w-[50px] h-[50px] z-50 cursor-default" onclick="toggleCheat()"></div>
+    
+    <!-- Chấm đỏ báo hiệu ẩn/hiện -->
+    <div id="cheat-indicator" class="fixed top-2 left-2 w-1.5 h-1.5 bg-red-500 rounded-full z-50 hidden opacity-80 shadow-[0_0_5px_rgba(239,68,68,1)] transition-opacity duration-300"></div>
+
+    <!-- MÀN HÌNH SETUP -->
+    <div id="setup-screen" class="flex-grow flex items-center justify-center p-4 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-800 via-slate-900 to-black">
+        <div class="glow-card w-full max-w-2xl bg-slate-800/80 backdrop-blur-xl border border-slate-700 rounded-3xl p-6 sm:p-10 relative z-10">
+            
+            <h1 class="text-4xl font-black text-center text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400 mb-8 uppercase tracking-tight">Thử Thách Party</h1>
+            
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-6">
+                <div>
+                    <label class="block text-sm font-semibold text-slate-400 mb-2 uppercase tracking-wider">Người Chơi 1 (Bạn)</label>
+                    <input type="text" id="p1-name" value="Người chơi 1" class="w-full bg-slate-900/50 border border-slate-700 text-white px-4 py-3 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all font-semibold">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-slate-400 mb-2 uppercase tracking-wider">Người Chơi 2 (Đối thủ)</label>
+                    <input type="text" id="p2-name" value="Người chơi 2" class="w-full bg-slate-900/50 border border-slate-700 text-white px-4 py-3 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all font-semibold">
+                </div>
+            </div>
+
+            <div class="mb-8">
+                <label class="block text-sm font-semibold text-slate-400 mb-2 uppercase tracking-wider flex justify-between items-end">
+                    <span>Dữ liệu JSON</span>
+                </label>
+                <textarea id="json-input" rows="12" class="w-full bg-slate-900/80 border border-slate-700 text-slate-300 px-4 py-3 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all font-mono text-xs sm:text-sm resize-y leading-relaxed"></textarea>
+                <p id="json-error" class="text-rose-400 text-sm mt-2 font-medium hidden flex items-center">
+                    <svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> 
+                    JSON không hợp lệ. Vui lòng kiểm tra lại!
+                </p>
+            </div>
+
+            <button onclick="startGame()" class="w-full bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-black py-4 px-4 rounded-xl transition-all shadow-[0_0_20px_rgba(79,70,229,0.3)] hover:shadow-[0_0_30px_rgba(79,70,229,0.5)] transform active:scale-[0.98] text-lg uppercase tracking-wider">
+                Bắt Đầu Trò Chơi
+            </button>
+        </div>
+    </div>
+
+    <!-- MÀN HÌNH GAME -->
+    <div id="game-screen" class="min-h-screen hidden flex-col items-center py-6 px-4 sm:px-6 relative no-select">
+        
+        <!-- Header thông tin 2 người chơi -->
+        <div class="w-full max-w-3xl flex justify-between items-center mb-6 px-6 py-4 bg-slate-800/50 backdrop-blur-md rounded-2xl border border-slate-700/50 shadow-lg">
+            <div class="flex flex-col items-start">
+                <span class="text-xs text-slate-500 font-bold uppercase tracking-widest mb-1">P1 (Bạn)</span>
+                <div id="ui-p1-name" class="text-base sm:text-xl font-black text-cyan-400 drop-shadow-sm">Người chơi 1</div>
+            </div>
+            <div class="text-xs sm:text-sm font-black text-slate-500 bg-slate-900/80 px-4 py-1.5 rounded-full uppercase tracking-widest border border-slate-700 shadow-inner">VS</div>
+            <div class="flex flex-col items-end">
+                <span class="text-xs text-slate-500 font-bold uppercase tracking-widest mb-1">P2 (Đối thủ)</span>
+                <div id="ui-p2-name" class="text-base sm:text-xl font-black text-rose-400 drop-shadow-sm">Người chơi 2</div>
+            </div>
+        </div>
+
+        <!-- THẺ THỬ THÁCH -->
+        <div class="w-full max-w-md bg-slate-800 rounded-[2rem] shadow-2xl overflow-hidden border border-slate-700 flex flex-col relative z-10 transition-all duration-500 glow-card" id="challenge-card">
+            
+            <!-- Lượt của ai -->
+            <div class="bg-slate-900/60 border-b border-slate-700/50 px-6 py-4 flex justify-between items-center">
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-widest">Đang tới lượt</span>
+                <span id="current-player-display" class="text-sm sm:text-base font-black px-4 py-1.5 rounded-full shadow-inner transition-colors duration-300"></span>
+            </div>
+            
+            <!-- Tỉ lệ Special Challenge (Chỉ mang tính chất hiển thị/tâm lý) -->
+            <div id="probability-bar" class="px-6 py-3 bg-gradient-to-r from-slate-800 to-slate-900 border-b border-slate-700/50 flex justify-center items-center gap-2 transition-colors duration-300">
+                <span class="text-slate-400 text-xs font-semibold uppercase tracking-wider">Tỉ lệ xuất hiện Special:</span>
+                <span id="special-chance-ui" class="font-black text-white text-sm bg-slate-700 px-2 py-0.5 rounded shadow-inner">0%</span>
+            </div>
+
+            <!-- Nội dung Bốc thăm -->
+            <div class="p-8 sm:p-10 text-center min-h-[320px] flex flex-col justify-center relative bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wMykiLz48L3N2Zz4=')]">
+                
+                <div id="event-type-badge" class="inline-block px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest mb-6 mx-auto w-max shadow-sm transition-all border border-transparent">
+                    Đang tải...
+                </div>
+                
+                <h2 id="event-title" class="text-2xl sm:text-3xl font-black text-white mb-6 leading-tight drop-shadow-md">
+                    Đang bốc thăm...
+                </h2>
+                
+                <div class="flex flex-wrap justify-center gap-3 mb-4">
+                    <span id="event-intensity" class="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center shadow-inner hidden border"></span>
+                    <span id="event-material" class="px-3 py-1.5 bg-slate-700/50 text-slate-300 border border-slate-600 rounded-lg text-xs font-bold uppercase tracking-wider hidden shadow-inner"></span>
+                </div>
+                
+                <p id="event-extra" class="text-rose-300 text-sm font-semibold mt-4 bg-rose-900/30 px-4 py-2 rounded-lg border border-rose-800/50 hidden mx-auto"></p>
+            </div>
+
+            <!-- Nút Hành Động -->
+            <div class="px-6 py-6 bg-slate-900/90 border-t border-slate-700 flex gap-4">
+                <button onclick="handleNoPass()" id="btn-nopass" class="flex-1 bg-transparent border-2 border-rose-500/60 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 font-black py-4 rounded-2xl transition-all uppercase tracking-wider text-sm">
+                    Không Pass ✗
+                </button>
+                <button onclick="handlePass()" id="btn-pass" class="flex-1 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-900 font-black py-4 rounded-2xl transition-all uppercase tracking-wider text-sm shadow-[0_0_15px_rgba(16,185,129,0.2)] transform hover:-translate-y-0.5">
+                    Pass ✓
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL HÌNH PHẠT -->
+    <div id="punishment-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-black/80 backdrop-blur-sm transition-opacity"></div>
+        <div class="relative w-full max-w-sm transform scale-95 opacity-100 transition-all">
+            <div class="bg-slate-800 rounded-3xl shadow-[0_0_40px_rgba(0,0,0,0.5)] border border-slate-700 overflow-hidden flex flex-col">
+                <div class="p-8 text-center bg-gradient-to-b from-rose-900/30 to-slate-800 relative">
+                    <div class="w-16 h-16 bg-rose-500/10 text-rose-400 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl border border-rose-500/20">
+                        ⚠️
+                    </div>
+                    <h3 class="text-2xl font-black text-white mb-3 uppercase tracking-wider">Hình Phạt!</h3>
+                    <p id="punishment-text" class="text-rose-200 font-medium text-base leading-relaxed"></p>
+                </div>
+                <div class="p-4 bg-slate-900/80 border-t border-slate-700">
+                    <button onclick="closePunishmentAndNextTurn()" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 px-4 rounded-xl transition-all uppercase tracking-widest text-xs">
+                        Đã Hoàn Thành
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL GAME OVER -->
+    <div id="gameover-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-black/90 backdrop-blur-md transition-opacity"></div>
+        <div class="relative w-full max-w-md transform transition-all">
+            <div class="bg-slate-800 rounded-[2rem] shadow-[0_0_50px_rgba(234,179,8,0.15)] border border-amber-500/30 overflow-hidden flex flex-col">
+                <div class="p-10 text-center bg-gradient-to-b from-amber-900/30 via-slate-800 to-slate-800 relative">
+                    <div class="text-6xl mb-4 drop-shadow-md">💀</div>
+                    <h3 class="text-3xl font-black text-rose-500 mb-2 uppercase tracking-tighter drop-shadow-md">GAME OVER</h3>
+                    <p class="text-slate-400 text-xs uppercase tracking-widest mb-4 font-bold">Người Chiến Thắng Là</p>
+                    <div id="winner-name" class="text-3xl sm:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-yellow-500 uppercase break-words leading-tight"></div>
+                </div>
+                <div class="p-6 bg-slate-900/90 flex flex-col items-center border-t border-slate-700">
+                    <p id="loser-reason" class="text-rose-300 text-sm text-center mb-6 font-medium bg-rose-950/30 px-4 py-3 rounded-xl border border-rose-900/50 w-full"></p>
+                    <button onclick="location.reload()" class="w-full bg-white hover:bg-slate-200 text-slate-900 font-black py-4 px-4 rounded-xl transition-all uppercase tracking-widest text-sm shadow-lg transform hover:-translate-y-0.5">
+                        Chơi Lại Từ Đầu
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Dữ liệu JSON Mặc định (có đủ các dải intensity để cheat hoạt động mượt)
+        const sampleJSON = {
+  "challenges": [
+    {
+      "challenge": "làm pet (mèo hoặc chó, tùy ý tự chọn) để đối phương vút ve trong vòng 1 phút. trong suốt thử thách không được phát ra tiếng kêu ngoài tiếng mèo hoặc chó.",
+      "punishment": "làm 3 tư thế theo ý đối phương, mỗi tư trong vòng 30s.",
+      "fail": false,
+      "intensity": 7
+    },
+    {
+      "challenge": "bj cho đối phương trong vòng 3 phút, khiến đối phương xuất tinh trước thời gian. thử thách kết thúc với chiến thắng dành cho người bị thách.",
+      "punishment": null,
+      "fail": false,
+      "intensity": 2
+    },
+    {
+      "challenge": "ngồi im hoặc nằm im bất động trong 3 phút để đối phương tùy ý sử dụng phần cơ thể trên. cấm phát ra tiếng động.",
+      "punishment": "uống hết tinh trùng hoặc dịch âm đạo khi người thách xuất tinh trong khi recording.",
+      "fail": false,
+      "intensity": 7
+    },
+    {
+      "challenge": "để đối phương sờ soạng với quần áo (không được sờ soạng bên trong quần áo). Được phép dùng bất kỳ cách sờ soạng nào (miệng, tay, mũi…). không được phát ra tiếng động khi thử thách, nếu không sẽ tính thua.",
+      "punishment": null,
+      "fail": false,
+      "intensity": 2
+    },
+    {
+      "challenge": "skinship đối phương (cuddle, ôm, hôn) trong 1 phút, ai có hành động quá hạn sẽ tính thua (hôn pháp, sờ soạng).",
+      "punishment": "liếm chân đối phương trong 30s.",
+      "fail": false,
+      "intensity": 2
+    },
+    {
+      "challenge": "Bịt mắt trong 2 phút. Đối phương sẽ dùng miệng hoặc tay chạm vào 5 vị trí khác nhau trên cơ thể. Người thách phải đoán đúng ít nhất 3/5 vị trí.",
+      "punishment": "Phải làm đúng 1 tư thế mà đối phương chọn và dirty talk trong 45 giây khi đang ghi hình.",
+      "fail": false,
+      "intensity": 7
+    },
+    {
+      "challenge": "Người thách ngồi lên mặt đối phương (no wear) trong 1 phút. Người thách được phép làm mọi thứ lên mặt của người bị thách. Người bị thách chỉ được ngồi im. Cử động hoặc phát ra tiếng thì thử thách thất bại tính thua.",
+      "punishment": null,
+      "fail": false,
+      "intensity": 9
+    },
+    {
+      "challenge": "Bất động, để đối phương cọ xát vùng nhạy cảm vào người bất kỳ vị trí nào họ muốn trong 90 giây (no wear). Thử thách thất bại tính thua.",
+      "punishment": null,
+      "fail": false,
+      "intensity": 8
+    },
+    {
+      "challenge": "No wear toàn thân cho đối phương tùy ý chạm trong 3 phút.",
+      "punishment": null,
+      "fail": false,
+      "intensity": 7
+    },
+    {
+      "challenge": "hôn đối phương ở 3 chỗ chỉ định (bất kỳ).",
+      "punishment": "để đối phương hôn ở ba nơi mà đối phương thích. (không giới hạn cách hôn)",
+      "fail": false,
+      "intensity": 4
+    },
+    {
+      "challenge": "Phải làm đối phương rên trước 1 phút (không giới hạn cách thức).",
+      "punishment": "thủ dâm & dirty talk cho đối phương xem trong khi recording 3 phút.",
+      "fail": false,
+      "intensity": 7
+    },
+    {
+      "challenge": "Kể một câu chuyện làm đối phương cười trong 3 phút.",
+      "punishment": "Phải làm đối phương cương hoặc ra dịch âm đạo trong 3 phút. Hình phạt thất bại end game.",
+      "fail": false,
+      "intensity": 2
+    },
+    {
+      "challenge": "cho đối phương ôm sau lưng trong vòng 30s.",
+      "punishment": null,
+      "fail": false,
+      "intensity": 2
+    },
+    {
+      "challenge": "Thực hiện sex - không cử động trong 1 phút. Ai cử động trước thì thua.",
+      "punishment": "Bị viết lên người.",
+      "fail": false,
+      "intensity": 8
+    },
+    {
+      "challenge": "thực hiện handjob cho đối phương, nếu đối phương xuất tinh trước thời gian 3 phút. Thử thách kết thúc.",
+      "punishment": null,
+      "fail": false,
+      "intensity": 7
+    },
+    {
+      "challenge": "Trong vòng 5 phút phải lột đồ đối phương.",
+      "punishment": "thì thầm dirty talk bên tai đối phương và thực hiện handjob cho đối phương trong 3 phút.",
+      "fail": false,
+      "intensity": 6
+    },
+    {
+      "challenge": "Nhìn vào mắt nhau đối phương hoặc cười hoặc thua.",
+      "punishment": "liếm vào vị trí đối phương chỉ định trên cơ thể trong 30s.",
+      "fail": false,
+      "intensity": 3
+    },
+    {
+      "challenge": "đọc dự báo thời tiết trong khi đối phương bj (có thể làm mọi cách để phân tâm, như dirty talk). Không hoàn thành bảng tin trước 1 phút bị tính thua.",
+      "punishment": null,
+      "fail": false,
+      "intensity": 8
+    },
+    {
+      "challenge": "Bạn phải thực hiện khác đi mọi yêu cầu của đối phương. Nếu bạn thực hiện theo yêu cầu của đối phương trong 3 phút thì bạn thua.",
+      "punishment": "thực hiện mọi yêu cầu đối phương trong 3 phút.",
+      "fail": false,
+      "intensity": 5
+    }
+  ],
+  "opportunities": [
+    {
+      "description": "Được bỏ qua thử thách 1 lần",
+      "fail": false,
+      "intensity": 1
+    },
+    {
+      "description": "Được bỏ qua thử thách 1 lần nếu bạn có 3 tấm hình selfie chu môi hoặc thực hiện selfie chu môi.",
+      "fail": false,
+      "intensity": 1
+    },
+    {
+      "description": "bạn được phép cùng partner thực hiện tư thế sex yêu thích của bạn",
+      "fail": false,
+      "intensity": 6
+    },
+    {
+      "description": "Được đổi thử thách hiện tại sang một thử thách khác (do đối phương chọn) 1 lần.",
+      "fail": false,
+      "intensity": 1
+    },
+    {
+      "description": "Được dùng 1 lần để yêu cầu đối phương cùng thực hiện thử thách với mình (cả hai cùng làm).",
+      "fail": false,
+      "intensity": 2
+    }
+  ],
+  "special_challenges": [
+    {
+      "challenge": "không được nói tiếng anh cho đến khi kết thúc trò chơi.",
+      "fail_condition": "fail quá ba lần thì thua",
+      "fail": false,
+      "intensity": 2
+    },
+    {
+      "challenge": "Không được nói chữ “gì” trong khi kết thúc trò chơi.",
+      "fail_condition": "fail quá ba lần thì thua",
+      "fail": false,
+      "intensity": 2
+    },
+    {
+      "challenge": "không được nói số cho đến khi kết thúc trò chơi.",
+      "fail_condition": "fail quá ba lần thì thua",
+      "fail": false,
+      "intensity": 2
+    },
+    {
+      "challenge": "Không được nói từ “em” hoặc “anh” cho đến khi kết thúc trò chơi.",
+      "fail_condition": "Fail quá 3 lần thì thua.",
+      "fail": false,
+      "intensity": 2
+    },
+    {
+      "challenge": "Không được dùng từ “có” hoặc “không” cho đến khi kết thúc trò chơi.",
+      "fail_condition": "Fail quá 3 lần thì thua.",
+      "fail": false,
+      "intensity": 2
+    }
+  ],
+  "intensity_scale": {
+    "1-2": "Nhẹ / không tình dục",
+    "3-4": "Nhẹ tình cảm / soft",
+    "5-6": "Trung bình",
+    "7-8": "Mạnh / khá bạo",
+    "9-10": "Rất bạo / hardcore"
+  }
+}
+
+
+        // Điền sẵn dữ liệu vào textarea
+        document.getElementById('json-input').value = JSON.stringify(sampleJSON, null, 2);
+
+        let gameData = null;
+        let p1 = ""; // You
+        let p2 = ""; // Opponent
+        
+        let currentPlayerNum = 1; // 1 = P1, 2 = P2
+        let currentEvent = null; 
+        
+        // Theo dõi trạng thái đã dùng Special Challenge chưa (Tối đa 1 lần/người)
+        let p1SpecialUsed = false;
+        let p2SpecialUsed = false;
+
+        // Cơ chế Cheat
+        let isCheatMode = false;
+        let cheatTimeout = null;
+
+        function toggleCheat() {
+            isCheatMode = !isCheatMode;
+            
+            // Nếu bật, hiển thị chấm đỏ 1.5s rồi ẩn đi để giữ bí mật
+            if (isCheatMode) {
+                const indicator = document.getElementById('cheat-indicator');
+                indicator.classList.remove('hidden');
+                
+                // Xóa timeout cũ nếu có bấm liên tục
+                if (cheatTimeout) clearTimeout(cheatTimeout);
+                
+                cheatTimeout = setTimeout(() => {
+                    indicator.classList.add('hidden');
+                }, 1500);
+            }
+        }
+
+        function startGame() {
+            p1 = document.getElementById('p1-name').value.trim() || "Người chơi 1";
+            p2 = document.getElementById('p2-name').value.trim() || "Người chơi 2";
+            
+            const rawJson = document.getElementById('json-input').value;
+            try {
+                gameData = JSON.parse(rawJson);
+                document.getElementById('json-error').classList.add('hidden');
+                
+                // Đổi UI sang màn hình Game
+                document.getElementById('setup-screen').classList.add('hidden');
+                const gameScreen = document.getElementById('game-screen');
+                gameScreen.classList.remove('hidden');
+                gameScreen.classList.add('flex');
+                
+                document.getElementById('ui-p1-name').innerText = p1;
+                document.getElementById('ui-p2-name').innerText = p2;
+
+                // Reset state
+                currentPlayerNum = 1;
+                p1SpecialUsed = false;
+                p2SpecialUsed = false;
+
+                startTurn();
+
+            } catch (e) {
+                document.getElementById('json-error').classList.remove('hidden');
+            }
+        }
+
+        function startTurn() {
+            // Cập nhật giao diện người đang chơi
+            const currentName = currentPlayerNum === 1 ? p1 : p2;
+            const pDisplay = document.getElementById('current-player-display');
+            pDisplay.innerText = currentName;
+            
+            if(currentPlayerNum === 1) {
+                pDisplay.className = "text-sm sm:text-base font-black px-4 py-1.5 rounded-full shadow-inner bg-cyan-900/40 text-cyan-400 border border-cyan-800/50";
+            } else {
+                pDisplay.className = "text-sm sm:text-base font-black px-4 py-1.5 rounded-full shadow-inner bg-rose-900/40 text-rose-400 border border-rose-800/50";
+            }
+
+            // Kiểm tra trạng thái dính special
+            let hasUsedSpecial = (currentPlayerNum === 1) ? p1SpecialUsed : p2SpecialUsed;
+
+            // 1. Sinh "Tỉ lệ xuất hiện Special Challenge" UI
+            let visualChance = Math.floor(Math.random() * 80) + 1; // Random 1-80%
+            
+            // Nếu người này ĐÃ từng dính Special, tỉ lệ thực và hiển thị phải bằng 0% (Luật mới)
+            if (hasUsedSpecial) {
+                visualChance = 0;
+            }
+            
+            // Cập nhật UI thanh tỉ lệ
+            const probUi = document.getElementById('special-chance-ui');
+            const probBar = document.getElementById('probability-bar');
+            probUi.innerText = visualChance + '%';
+            
+            if (visualChance === 0) {
+                probUi.className = "font-black text-slate-500 text-sm bg-slate-800 px-2 py-0.5 rounded shadow-inner";
+                probBar.className = "px-6 py-3 bg-slate-900/80 border-b border-slate-700/50 flex justify-center items-center gap-2 transition-colors duration-300";
+            } else {
+                probUi.className = "font-black text-amber-400 text-sm bg-amber-900/60 px-2 py-0.5 rounded shadow-inner animate-pulse";
+                probBar.className = "px-6 py-3 bg-gradient-to-r from-amber-900/20 to-orange-900/20 border-b border-amber-800/30 flex justify-center items-center gap-2 transition-colors duration-300";
+            }
+
+            // 2. Logic Bốc thăm sự kiện
+            let eventType = 'challenge'; 
+            let pool = [];
+
+            if (isCheatMode) {
+                // ==================== CHEAT MODE BẬT ====================
+                if (currentPlayerNum === 1) {
+                    // MÌNH (P1): 0% Special, chỉ bốc Normal Easy (Intensity <= 4)
+                    eventType = 'challenge';
+                    let easyPool = gameData.challenges.filter(c => c.intensity <= 4);
+                    if (easyPool.length > 0) {
+                        pool = easyPool;
+                    } else {
+                        // Fallback nếu JSON k có đồ dễ -> Lấy cái dễ nhất trong mảng
+                        pool = [...gameData.challenges].sort((a,b) => a.intensity - b.intensity).slice(0, 1);
+                    }
+                } else {
+                    // ĐỐI THỦ (P2)
+                    if (!p2SpecialUsed) {
+                        // Chưa bị special -> Ép 100% dính Special
+                        eventType = 'special_challenge';
+                    } else {
+                        // Đã bị special -> 0% Special, Ép 100% Normal Hard (Intensity >= 7)
+                        eventType = 'challenge';
+                        let hardPool = gameData.challenges.filter(c => c.intensity >= 7);
+                        if (hardPool.length > 0) {
+                            pool = hardPool;
+                        } else {
+                            // Fallback nếu JSON k có đồ khó -> Lấy cái khó nhất
+                            pool = [...gameData.challenges].sort((a,b) => b.intensity - a.intensity).slice(0, 1);
+                        }
+                    }
+                }
+            } else {
+                // ==================== CHƠI BÌNH THƯỜNG (CHEAT TẮT) ====================
+                if (visualChance > 0) {
+                    let roll = Math.random() * 100;
+                    if (roll <= visualChance) {
+                        eventType = 'special_challenge';
+                    } else if (roll <= visualChance + 10) { 
+                        // 10% cơ hội rơi vào opportunity
+                        eventType = 'opportunity';
+                    } else {
+                        eventType = 'challenge';
+                    }
+                } else {
+                    // Nếu visualChance = 0 (tức là đã xài special rồi)
+                    let roll = Math.random() * 100;
+                    if (roll <= 15) { // 15% vào opportunity nếu đã mất quyền special
+                        eventType = 'opportunity';
+                    } else {
+                        eventType = 'challenge';
+                    }
+                }
+            }
+
+            // Kiểm tra fallback cho pool dữ liệu
+            if (eventType === 'opportunity' && (!gameData.opportunities || gameData.opportunities.length === 0)) eventType = 'challenge';
+            if (eventType === 'special_challenge' && (!gameData.special_challenges || gameData.special_challenges.length === 0)) eventType = 'challenge';
+
+            // Gán dữ liệu cho pool
+            if (eventType === 'challenge' && pool.length === 0) pool = [...gameData.challenges]; // Normal pool
+            else if (eventType === 'opportunity') pool = [...gameData.opportunities];
+            else if (eventType === 'special_challenge') pool = [...gameData.special_challenges];
+
+            // Bốc ngẫu nhiên 1 sự kiện
+            currentEvent = pool[Math.floor(Math.random() * pool.length)];
+            currentEvent.type = eventType;
+
+            // Đánh dấu đã dùng Special
+            if (eventType === 'special_challenge') {
+                if (currentPlayerNum === 1) p1SpecialUsed = true;
+                else p2SpecialUsed = true;
+            }
+
+            renderEventUI();
+        }
+
+        function renderEventUI() {
+            const badge = document.getElementById('event-type-badge');
+            const title = document.getElementById('event-title');
+            const intensity = document.getElementById('event-intensity');
+            const material = document.getElementById('event-material');
+            const extra = document.getElementById('event-extra');
+            const card = document.getElementById('challenge-card');
+
+            // Reset trạng thái element
+            intensity.classList.remove('hidden');
+            material.classList.add('hidden');
+            extra.classList.add('hidden');
+            
+            // Xóa class style cũ của card
+            card.className = "w-full max-w-md bg-slate-800 rounded-[2rem] overflow-hidden border flex flex-col relative z-10 transition-all duration-500 glow-card";
+
+            if (currentEvent.type === 'opportunity') {
+                badge.innerText = "CƠ HỘI ĐẶC BIỆT ✨";
+                badge.className = "inline-block px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest mb-6 mx-auto w-max bg-emerald-500/20 text-emerald-400 border border-emerald-500/50";
+                title.innerText = currentEvent.description;
+                title.className = "text-2xl sm:text-3xl font-black text-emerald-300 mb-6 leading-tight drop-shadow-md";
+                card.classList.add('border-emerald-900/50', 'shadow-[0_0_40px_-10px_rgba(16,185,129,0.2)]');
+            } 
+            else if (currentEvent.type === 'special_challenge') {
+                badge.innerText = "THỬ THÁCH ĐẶC BIỆT 🔥";
+                badge.className = "inline-block px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest mb-6 mx-auto w-max bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.2)] animate-pulse";
+                title.innerText = currentEvent.challenge;
+                title.className = "text-2xl sm:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-br from-amber-200 to-orange-500 mb-6 leading-tight drop-shadow-lg";
+                card.classList.add('border-amber-900/50', 'shadow-[0_0_40px_-10px_rgba(245,158,11,0.2)]');
+                
+                if (currentEvent.fail_condition) {
+                    extra.innerText = `⚠️ Nhấn KHÔNG PASS nếu: ${currentEvent.fail_condition}`;
+                    extra.classList.remove('hidden');
+                }
+            } 
+            else {
+                badge.innerText = "THỬ THÁCH THƯỜNG";
+                badge.className = "inline-block px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest mb-6 mx-auto w-max bg-blue-500/20 text-blue-400 border border-blue-500/30";
+                title.innerText = currentEvent.challenge;
+                title.className = "text-2xl sm:text-3xl font-black text-white mb-6 leading-tight drop-shadow-md";
+                card.classList.add('border-slate-700');
+                
+                let mat = currentEvent.material || gameData.material;
+                if (mat && mat.trim() !== "" && mat.toLowerCase() !== "không" && mat.toLowerCase() !== "không có") {
+                    material.innerText = `Dụng cụ: ${mat}`;
+                    material.classList.remove('hidden');
+                }
+            }
+
+            // Gắn class màu cho Độ khó
+            let intColor = 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50';
+            if (currentEvent.intensity >= 5 && currentEvent.intensity <= 7) {
+                intColor = 'bg-orange-500/20 text-orange-400 border-orange-500/50';
+            } else if (currentEvent.intensity >= 8) {
+                intColor = 'bg-rose-500/20 text-rose-400 border-rose-500/50';
+            }
+            intensity.className = `px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center shadow-inner border ${intColor}`;
+            intensity.innerText = `Độ khó: ${currentEvent.intensity}/10`;
+        }
+
+        function handlePass() {
+            nextTurn();
+        }
+
+        function handleNoPass() {
+            // Kiểm tra thuộc tính fail: true -> Game over ngay lập tức
+            if (currentEvent.fail === true) {
+                const winner = currentPlayerNum === 1 ? p2 : p1;
+                const loser = currentPlayerNum === 1 ? p1 : p2;
+                let reason = `${loser} đã thất bại ở một thử thách CHÍ MẠNG.`;
+                if (currentEvent.fail_condition) {
+                    reason = `${loser} đã dính điều kiện thua: "${currentEvent.fail_condition}".`;
+                }
+                triggerGameOver(winner, reason);
+            } else {
+                // fail: false -> Hiện hình phạt bình thường
+                let punishmentText = currentEvent.punishment || "Chịu phạt 1 ly nước đầy.";
+                document.getElementById('punishment-text').innerText = punishmentText;
+                document.getElementById('punishment-modal').classList.remove('hidden');
+            }
+        }
+
+        function closePunishmentAndNextTurn() {
+            document.getElementById('punishment-modal').classList.add('hidden');
+            nextTurn();
+        }
+
+        function nextTurn() {
+            // Đổi người chơi
+            currentPlayerNum = currentPlayerNum === 1 ? 2 : 1;
+            
+            // Hiệu ứng Loading nhẹ chuyển lượt
+            document.getElementById('event-title').innerText = "Đang lấy yêu cầu...";
+            document.getElementById('event-type-badge').innerText = "...";
+            document.getElementById('event-intensity').classList.add('hidden');
+            document.getElementById('event-material').classList.add('hidden');
+            document.getElementById('event-extra').classList.add('hidden');
+            document.getElementById('special-chance-ui').innerText = '--%';
+            
+            setTimeout(() => {
+                startTurn();
+            }, 500);
+        }
+
+        function triggerGameOver(winnerName, reason) {
+            document.getElementById('winner-name').innerText = winnerName;
+            document.getElementById('loser-reason').innerText = reason;
+            document.getElementById('gameover-modal').classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
