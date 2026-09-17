@@ -627,7 +627,7 @@
                 triggerGameOver(winner, reason);
             } else {
                 // fail: false -> Hiện hình phạt bình thường
-                let punishmentText = currentEvent.punishment || "Chịu phạt 1 ly nước đầy.";
+                let punishmentText = currentEvent.punishment || ".";
                 document.getElementById('punishment-text').innerText = punishmentText;
                 document.getElementById('punishment-modal').classList.remove('hidden');
             }
